@@ -57,7 +57,7 @@ For the full walkthrough, see **[USAGE.md](USAGE.md)**.
 
 ## Screenshots
 
-> _Add a dashboard screenshot here — drop a PNG into a `docs/` folder and reference it as `![Dashboard](docs/dashboard.png)`._
+ `![Dashboard](docs/dashboard.png)`
 ## Contributing
 
 Issues and PRs welcome. If you're proposing a new feature, please open an issue first so we can agree on scope before you write code.
