@@ -1,0 +1,17 @@
+# User settings & data — these belong on the user's machine, not the repo
+macromanager.ini
+.macromanager.ini
+macromgr_recover.tmp
+
+# AHK compiler output
+*.exe
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+Thumbs.db
+desktop.ini
+.DS_Store
