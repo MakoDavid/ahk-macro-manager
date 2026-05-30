@@ -57,7 +57,8 @@ For the full walkthrough, see **[USAGE.md](USAGE.md)**.
 
 ## Screenshots
 
- `![Dashboard](docs/dashboard.png)`
+![Dashboard](docs/dashboard.png)
+
 ## Contributing
 
 Issues and PRs welcome. If you're proposing a new feature, please open an issue first so we can agree on scope before you write code.
