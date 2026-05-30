@@ -1,4 +1,4 @@
-# AHK Macro Manager
+# Macro Manager
 
 A lightweight AutoHotkey v2 macro recorder and manager for Windows. Record mouse and keyboard input, organize macros into folders, bind them to hotkeys, and replay them with loop/speed/delay controls — all from a single tray-based GUI.
 
@@ -58,7 +58,6 @@ For the full walkthrough, see **[USAGE.md](USAGE.md)**.
 ## Screenshots
 
 > _Add a dashboard screenshot here — drop a PNG into a `docs/` folder and reference it as `![Dashboard](docs/dashboard.png)`._
-
 ## Contributing
 
 Issues and PRs welcome. If you're proposing a new feature, please open an issue first so we can agree on scope before you write code.
