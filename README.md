@@ -8,16 +8,16 @@ A lightweight AutoHotkey v2 macro recorder and manager for Windows. Record mouse
 
 ## Features
 
-- 🎬 **Record** mouse moves, clicks, and keystrokes to standalone `.ahk` files
-- ▶️ **Playback** with adjustable loop count, speed %, and start-delay countdown
-- 📁 **Folders** to organize macros (per-game, per-task, whatever you want)
-- 🔑 **Hotkey bindings** that survive restarts and can be paused from the tray
-- ⏸ **Pause/resume** mid-recording (F3) and **undo** the last action (F4)
-- 💾 **Crash recovery** — autosaves the in-progress recording every 10 s
-- 🔎 **Live search** to filter large macro lists
-- 📥 **Import / export** self-contained scripts you can share
-- 🖱 Right-click context menu, double-click to play
-- 🚀 Optional **launch at Windows startup**
+- **Record** mouse moves, clicks, and keystrokes to standalone `.ahk` files
+- **Playback** with adjustable loop count, speed %, and start-delay countdown
+- **Folders** to organize macros (per-game, per-task, whatever you want)
+- **Hotkey bindings** that survive restarts and can be paused from the tray
+- **Pause/resume** mid-recording (F3) and **undo** the last action (F4)
+- **Crash recovery** — autosaves the in-progress recording every 10 s
+- **Live search** to filter large macro lists
+- **Import / export** self-contained scripts you can share
+- Right-click context menu, double-click to play
+- Optional **launch at Windows startup**
 
 ## Requirements
 
