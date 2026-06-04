@@ -1,5 +1,7 @@
 #Requires AutoHotkey v2.0+
 #SingleInstance Force
+InstallMouseHook()
+InstallKeybdHook()
 
 CoordMode("Mouse", "Screen")
 CoordMode("ToolTip")
@@ -42,6 +44,10 @@ global StartupShortcut := A_Startup "\MacroManager.lnk"
 global LoopValue := "1"
 global SpeedValue := "100"
 global DelayValue := "0"
+; Low-level mouse hook state
+global MouseHookHandle := 0
+global MouseHookCallback := 0
+global HookFallbackActive := false
 
 MigrateOldSettings()
 LoadSettings()
@@ -558,6 +564,7 @@ StopAndSave(*) {
     Recording := false
     Paused := false
     SetHotkey(0)
+    UninstallLowLevelMouseHook()
     try Hotkey("F2", "Off")
     SetTimer(AutosaveRecording, 0)
     ShowTip()
@@ -1034,13 +1041,14 @@ SaveSettings() {
 }
 
 SaveOnExit(*) {
+    UninstallLowLevelMouseHook()
     SaveSettings()
 }
 
 ; ===== Recording Engine =====
 
 RecordScreen() {
-    global LogArr, Recording, LogLastTime, Paused, RecoverFile
+    global LogArr, Recording, LogLastTime, Paused, RecoverFile, KeyboardOnly, HookFallbackActive
     LogArr := []
     Recording := true
     Paused := false
@@ -1052,6 +1060,16 @@ RecordScreen() {
     SetHotkey(1)
     Hotkey("F2", StopAndSave, "On")
     SetTimer(AutosaveRecording, 10000)
+
+    ; Pixel-perfect mouse + wheel capture via WH_MOUSE_LL.
+    ; Falls back to 1 ms polling if the hook fails to install.
+    HookFallbackActive := false
+    if (!KeyboardOnly) {
+        if (!InstallLowLevelMouseHook()) {
+            HookFallbackActive := true
+            SetTimer(LogMouseMove, 1)
+        }
+    }
 }
 
 ShowTip(s := "") {
@@ -1071,7 +1089,7 @@ ShowTip(s := "") {
 }
 
 SetHotkey(f := false) {
-    global KeyboardOnly
+    global KeyboardOnly, HookFallbackActive
     fOn := f ? "On" : "Off"
     Loop 254 {
         k := GetKeyName(vk := Format("vk{:X}", A_Index))
@@ -1086,30 +1104,112 @@ SetHotkey(f := false) {
         sc := Format("sc{:03X}", GetKeySC(k))
         try Hotkey("~*" sc, LogKey, fOn)
     }
-    if (f = "On" || f = 1 || f = true) {
-        if (!KeyboardOnly)
-            SetTimer(LogMouseMove, 1)
-    } else {
-        SetTimer(LogMouseMove, 0)
+    ; Fallback movement polling is controlled by RecordScreen / StopAndSave when the hook can't install.
+    if (HookFallbackActive) {
+        if (f = "On" || f = 1 || f = true) {
+            if (!KeyboardOnly)
+                SetTimer(LogMouseMove, 1)
+        } else {
+            SetTimer(LogMouseMove, 0)
+        }
     }
 }
 
+; ===== Low-level mouse hook (pixel-perfect movement + every wheel notch) =====
+
+InstallLowLevelMouseHook() {
+    global MouseHookHandle, MouseHookCallback
+    if (MouseHookHandle)
+        return true
+    MouseHookCallback := CallbackCreate(LowLevelMouseProc, "F", 3)
+    if (!MouseHookCallback)
+        return false
+    hMod := DllCall("GetModuleHandleW", "Ptr", 0, "Ptr")
+    MouseHookHandle := DllCall("SetWindowsHookExW"
+        , "Int", 14            ; WH_MOUSE_LL
+        , "Ptr", MouseHookCallback
+        , "Ptr", hMod
+        , "UInt", 0
+        , "Ptr")
+    if (!MouseHookHandle) {
+        CallbackFree(MouseHookCallback)
+        MouseHookCallback := 0
+        return false
+    }
+    return true
+}
+
+UninstallLowLevelMouseHook() {
+    global MouseHookHandle, MouseHookCallback
+    if (MouseHookHandle) {
+        try DllCall("UnhookWindowsHookEx", "Ptr", MouseHookHandle)
+        MouseHookHandle := 0
+    }
+    if (MouseHookCallback) {
+        try CallbackFree(MouseHookCallback)
+        MouseHookCallback := 0
+    }
+}
+
+; Callback signature: LRESULT (int nCode, WPARAM wParam, LPARAM lParam)
+; lParam points to MSLLHOOKSTRUCT: { POINT pt (Int x@0, Int y@4); DWORD mouseData@8; DWORD flags@12; DWORD time@16; ULONG_PTR dwExtraInfo@20 }
+LowLevelMouseProc(nCode, wParam, lParam) {
+    global Recording, Paused, LogArr
+    static LastX := -2147483648, LastY := -2147483648
+
+    if (nCode >= 0 && Recording && !Paused) {
+        x := NumGet(lParam, 0, "Int")
+        y := NumGet(lParam, 4, "Int")
+
+        if (wParam = 0x0200) {                       ; WM_MOUSEMOVE
+            if (x != LastX || y != LastY) {
+                LastX := x
+                LastY := y
+                LogArr.Push("MouseMove(" x ", " y ", 0)")
+            }
+        } else if (wParam = 0x020A) {                ; WM_MOUSEWHEEL (vertical)
+            ; High 16 bits of mouseData = signed notch count * 120
+            wheelDelta := NumGet(lParam, 10, "Short")
+            if (wheelDelta != 0) {
+                notches := Abs(wheelDelta) // 120
+                if (notches < 1)
+                    notches := 1
+                LogArr.Push("MouseMove(" x ", " y ", 0)")
+                if (wheelDelta > 0)
+                    LogArr.Push("Click `"WheelUp " notches "`"")
+                else
+                    LogArr.Push("Click `"WheelDown " notches "`"")
+            }
+        } else if (wParam = 0x020E) {                ; WM_MOUSEHWHEEL (horizontal)
+            wheelDelta := NumGet(lParam, 10, "Short")
+            if (wheelDelta != 0) {
+                notches := Abs(wheelDelta) // 120
+                if (notches < 1)
+                    notches := 1
+                LogArr.Push("MouseMove(" x ", " y ", 0)")
+                if (wheelDelta > 0)
+                    LogArr.Push("Click `"WheelRight " notches "`"")
+                else
+                    LogArr.Push("Click `"WheelLeft " notches "`"")
+            }
+        }
+    }
+
+    return DllCall("CallNextHookEx", "Ptr", 0, "Int", nCode, "Ptr", wParam, "Ptr", lParam, "Ptr")
+}
+
+; Fallback polling (only used if SetWindowsHookEx fails — should be rare)
 LogMouseMove() {
     global Recording, Paused, LogArr, KeyboardOnly
-    static LastX := -1, LastY := -1, LastT := 0
+    static LastX := -2147483648, LastY := -2147483648
     if (!Recording || Paused || KeyboardOnly)
         return
     CoordMode("Mouse", "Screen")
     MouseGetPos(&X, &Y)
     if (X = LastX && Y = LastY)
         return
-    t := A_TickCount
-    ; Decimate: skip pushes that are both close in space (<5 px) AND close in time (<25 ms)
-    if (LastX >= 0 && Abs(X - LastX) + Abs(Y - LastY) < 5 && t - LastT < 25)
-        return
     LastX := X
     LastY := Y
-    LastT := t
     LogArr.Push("MouseMove(" X ", " Y ", 0)")
 }
 
@@ -1139,17 +1239,18 @@ LogKey_Control(key) {
     Log("{" k " Up}", 1)
 }
 
+; Refactored for hook compatibility: we insert the button press at the
+; remembered index so any hook-captured MouseMove events that arrive during
+; the click/drag stay in chronological order.
 LogKey_Mouse(key) {
-    global KeyboardOnly
+    global KeyboardOnly, LogArr
     if (KeyboardOnly)
         return
     k := SubStr(key, 1, 1)
 
     CoordMode("Mouse", "Screen")
     MouseGetPos(&X, &Y)
-
-    LogArr.Push("MouseMove(" X ", " Y ", 0)")
-    LogArr.Push("MouseClick(`"" k "`", " X ", " Y ",,, `"D`")")
+    pressIndex := LogArr.Length
 
     t1 := A_TickCount
     Critical("Off")
@@ -1161,10 +1262,11 @@ LogKey_Mouse(key) {
     MouseGetPos(&X2, &Y2)
 
     if (Abs(X2 - X) + Abs(Y2 - Y) < 5 && t2 - t1 <= 200) {
-        LogArr.Pop()
-        LogArr.Push("MouseClick(`"" k "`", " X ", " Y ")")
+        ; Simple click — single atomic press+release at press position
+        LogArr.InsertAt(pressIndex + 1, "MouseClick(`"" k "`", " X ", " Y ")")
     } else {
-        LogArr.Push("MouseMove(" X2 ", " Y2 ", 0)")
+        ; Drag — press at start, release at end; hook-captured moves are between
+        LogArr.InsertAt(pressIndex + 1, "MouseClick(`"" k "`", " X ", " Y ",,, `"D`")")
         LogArr.Push("MouseClick(`"" k "`", " X2 ", " Y2 ",,, `"U`")")
     }
 }
